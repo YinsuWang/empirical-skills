@@ -1,0 +1,8 @@
+interface:
+  display_name: 通用实证研究框架
+  short_description: 组织研究设计、数据审查、识别检验与可复现的计量分析流程
+  default_prompt: 使用 $empirical-research-protocol 为当前研究制定并执行适用的实证分析流程，说明每一步的目的、方法、产出与判断标准。
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  allow_implicit_invocation: true

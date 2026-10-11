@@ -1,0 +1,8 @@
+interface:
+  display_name: 经济学论文式计量汇报
+  short_description: 将计量分析整理为标准经济学回归表、诊断图与论文式结果报告
+  default_prompt: 使用 $empirical-results-reporting 汇报本轮计量分析，展示论文式回归表、必要图形、经济量级与识别局限。
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  allow_implicit_invocation: true
