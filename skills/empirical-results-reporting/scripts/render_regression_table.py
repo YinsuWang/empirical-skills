@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Format verified tidy estimates as an economics Markdown and LaTeX table.
+"""Format verified estimates as Markdown, LaTeX and HTML regression tables.
 
 No estimation, p-value calculation, or imputation. Python standard library only.
 """
 import argparse
 import csv
+import html
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -44,22 +46,50 @@ def stars(p):
     return '***' if p < .01 else '**' if p < .05 else '*' if p < .10 else ''
 
 
+@dataclass(frozen=True)
+class EstimateCell:
+    value: str
+    significance: str
+
+
+def math_number(value):
+    if 'e' in value.lower():
+        mantissa, exponent = value.lower().split('e')
+        return mantissa + r'\times 10^{' + str(int(exponent)) + '}'
+    return value
+
+
 def md(value):
+    if isinstance(value, EstimateCell):
+        if value.significance:
+            body = math_number(value.value)
+            if 'e' in value.value.lower():
+                body = '{' + body + '}'
+            return '$' + body + '^{' + value.significance + '}$'
+        return value.value
     return str(value).replace('\n', ' ').replace('|', r'\|')
 
 
 def tex(value):
+    if isinstance(value, EstimateCell):
+        return tex(value.value) + (r'\textsuperscript{' + value.significance + '}' if value.significance else '')
     escapes = {'\\': r'\textbackslash{}', '&': r'\&', '%': r'\%',
                '$': r'\$', '#': r'\#', '_': r'\_', '{': r'\{',
                '}': r'\}', '~': r'\textasciitilde{}', '^': r'\textasciicircum{}'}
     return ''.join(escapes.get(c, c) for c in str(value).replace('\n', ' '))
 
 
+def html_cell(value):
+    if isinstance(value, EstimateCell):
+        return html.escape(value.value) + ('<sup>' + value.significance + '</sup>' if value.significance else '')
+    return html.escape(str(value))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--estimates', required=True)
     parser.add_argument('--metadata', required=True)
-    parser.add_argument('--output', required=True, help='Markdown file; matching .tex also written')
+    parser.add_argument('--output', required=True, help='Markdown file; matching .tex and .html also written')
     parser.add_argument('--title', required=True)
     parser.add_argument('--note', required=True, help='Actual sample, estimator and inference notes')
     parser.add_argument('--digits', type=int, default=3)
@@ -106,7 +136,7 @@ def main():
             coefficients, ses = [labels[term]], ['']
             for model in models:
                 coefficient, se, p = lookup.get((model, term), (None, None, None))
-                coefficients.append(formatted(coefficient, args.digits) + stars(p))
+                coefficients.append(EstimateCell(formatted(coefficient, args.digits), stars(p)))
                 ses.append(f'({formatted(se, args.digits)})' if se is not None else '—')
             rows.extend([coefficients, ses])
         metadata_rows = [[field] + [(row.get(field) or '—') for row in meta]
@@ -127,11 +157,33 @@ def main():
         latex += [' & '.join(map(tex, row)) + r' \\' for row in metadata_rows]
         latex += [r'\bottomrule', r'\end{tabular}', r'\par\smallskip',
                   r'\parbox{\linewidth}{\footnotesize ' + tex(note) + '}', r'\end{table}', '']
+        html_output = [
+            '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width,initial-scale=1">',
+            '<title>' + html.escape(args.title) + '</title>',
+            '<style>body{font-family:"Times New Roman","Noto Serif CJK SC",serif;margin:32px;color:#111}',
+            'table{border-collapse:collapse;min-width:600px;max-width:100%;font-variant-numeric:tabular-nums}',
+            'caption{text-align:left;font-weight:bold;margin-bottom:16px}th,td{padding:7px 18px;text-align:right;white-space:nowrap}',
+            'th:first-child,td:first-child{text-align:left}thead{border-top:2px solid #111;border-bottom:1px solid #111}',
+            'tbody.parameters{border-bottom:1px solid #111}tbody.metadata{border-bottom:2px solid #111}',
+            'tr.se td{padding-top:0;color:#222}sup{font-size:.72em;vertical-align:super;line-height:0}',
+            '.notes{font-size:.9em;max-width:1000px;line-height:1.5}</style></head><body>',
+            '<table><caption>' + html.escape(args.title) + '</caption><thead><tr>',
+            ''.join('<th scope="col">' + html_cell(v) + '</th>' for v in header),
+            '</tr></thead><tbody class="parameters">']
+        for i, row in enumerate(rows):
+            html_output.append('<tr' + (' class="se"' if i % 2 else '') + '>' +
+                               ''.join('<td>' + html_cell(v) + '</td>' for v in row) + '</tr>')
+        html_output.append('</tbody><tbody class="metadata">')
+        html_output.extend('<tr>' + ''.join('<td>' + html_cell(v) + '</td>' for v in row) + '</tr>'
+                           for row in metadata_rows)
+        html_output.extend(['</tbody></table><p class="notes">Notes: ' + html.escape(note) + '</p>', '</body></html>'])
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text('\n'.join(markdown), encoding='utf-8')
         output.with_suffix('.tex').write_text('\n'.join(latex), encoding='utf-8')
-        print(f'Wrote {output} and {output.with_suffix(".tex")}')
+        output.with_suffix('.html').write_text('\n'.join(html_output), encoding='utf-8')
+        print(f'Wrote {output}, {output.with_suffix(".tex")} and {output.with_suffix(".html")}')
     except (ValueError, OSError) as error:
         parser.error(str(error))
 

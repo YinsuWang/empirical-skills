@@ -1,1 +1,1 @@
-model_id,column_label,Estimator,Estimand,Controls,Unit FE,Time FE,Sample,Inference,Cluster level,Clusters,Mean Y,SD Y,N,Units,R-squared type,R-squared
+model_id,column_label,Estimator,Estimand,Controls,Unit FE,Time FE,Sample,Inference,Cluster level,Clusters,Mean Y,SD Y,N,Units,R-squared type,R-squared,Adjusted R-squared,Model test type,Model test statistic,Model test p-value
